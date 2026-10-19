@@ -1,0 +1,10 @@
+{
+  "name": "digital-leave-system",
+  "private": true,
+  "version": "1.0.0",
+  "description": "BITM Smart Leave Management and Verification System",
+  "scripts": {
+    "build": "npm --prefix client run build",
+    "postinstall": "npm --prefix client install"
+  }
+}
