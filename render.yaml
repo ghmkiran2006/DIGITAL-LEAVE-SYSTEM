@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: bitm-leave-backend
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: PORT
+        value: "4000"
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

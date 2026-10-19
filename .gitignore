@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Production build artifacts
+dist/
+build/
+client/dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# SQLite temporary/WAL files
+*.db-wal
+*.db-shm
+
+# SQLite database (auto-created at runtime)
+server/data/
+
+# Package lock files (optional — remove if you want deterministic installs)
+package-lock.json
+
+# Server uploads / temporary storage (preserve directory structure)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
