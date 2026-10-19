@@ -1,0 +1,93 @@
+# 🌐 Deployment Guide: BITM Digital Leave Management System
+
+Your complete project has been pushed to GitHub:
+🔗 **Repository URL:** [https://github.com/ghmkiran2006/DIGITAL-LEAVE-SYSTEM](https://github.com/ghmkiran2006/DIGITAL-LEAVE-SYSTEM)
+
+---
+
+## Step 1: Deploy Backend on Render.com (Takes 3 Minutes)
+
+Render runs your Express server and keeps the SQLite database persistent on its free tier.
+
+1. **Sign in / Sign up to Render**:
+   - Go to [https://render.com](https://render.com) and click **Get Started for Free** (sign in with your GitHub account `ghmkiran2006`).
+
+2. **Create New Web Service**:
+   - On the Render Dashboard, click the blue **New +** button in the top right.
+   - Select **Web Service**.
+   - Select **Build and deploy from a Git repository**.
+   - Connect or select your GitHub repository: `ghmkiran2006/DIGITAL-LEAVE-SYSTEM`.
+
+3. **Configure the Web Service Settings**:
+   Fill in the fields exactly as follows:
+   - **Name**: `digital-leave-backend` (or any name you prefer)
+   - **Region**: Choose closest to you (e.g. *Singapore* or *Frankfurt*)
+   - **Branch**: `main`
+   - **Root Directory**: `server` ⚠️ *(Crucial: set to `server`)*
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+   - **Instance Type**: **Free** ($0/month)
+
+4. **Add Environment Variables**:
+   Scroll down to the **Environment Variables** section and add:
+   - `NODE_VERSION` = `22`
+   - `PORT` = `4000`
+   - `JWT_SECRET` = `bitm-secure-jwt-secret-key-2026-prod`
+   - `CORS_ORIGIN` = `*`
+
+5. **Deploy**:
+   - Click **Create Web Service** at the bottom.
+   - Once it says **"Live"**, copy your backend URL from the top of the page (e.g. `https://digital-leave-backend-xxxx.onrender.com`).
+
+---
+
+## Step 2: Deploy Frontend on Vercel (Takes 2 Minutes)
+
+Vercel provides lightning-fast global CDN hosting for the React + Vite frontend.
+
+1. **Sign in / Sign up to Vercel**:
+   - Go to [https://vercel.com](https://vercel.com) and click **Sign Up** (choose **Continue with GitHub** `ghmkiran2006`).
+
+2. **Import Repository**:
+   - In the Vercel dashboard, click **Add New...** → **Project**.
+   - Find `DIGITAL-LEAVE-SYSTEM` in the list and click **Import**.
+
+3. **Configure the Project**:
+   - **Framework Preset**: Vite *(Vercel detects this automatically)*
+   - **Root Directory**: Click **Edit** next to Root Directory and select or type `client` ⚠️ *(Crucial: must be `client`)*
+   - Click **Continue**.
+
+4. **Set Environment Variable (Connects Frontend to Backend)**:
+   - Expand the **Environment Variables** section.
+   - Add the following variable:
+     - **Key**: `VITE_API_BASE_URL`
+     - **Value**: Your Render backend URL from Step 1 (e.g. `https://digital-leave-backend-xxxx.onrender.com`)
+   - Click **Add**.
+
+5. **Click Deploy**:
+   - Click the blue **Deploy** button.
+   - Within 60 seconds, Vercel will build the frontend and show a celebration screen with your live production URL!
+
+---
+
+## Step 3: Final 1-Minute Hookup (CORS Update)
+
+Now that you have your Vercel URL:
+1. Go back to your [Render Dashboard](https://dashboard.render.com).
+2. Click on your `digital-leave-backend` service → **Environment**.
+3. Update the `CORS_ORIGIN` variable to your Vercel domain:
+   ```
+   https://your-app-name.vercel.app
+   ```
+4. Click **Save Changes**. Render will automatically redeploy with the strict origin policy in seconds.
+
+---
+
+## 🔑 Default Production Credentials
+
+- **Authority Login**:
+  - **Email**: `BITM@gmail.com`
+  - **Password**: `BITM1234`
+- **Student Accounts**:
+  - Provisioned exclusively by Authority from **Student Management → Add Student**.
