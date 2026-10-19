@@ -331,7 +331,7 @@ function seedData() {
     db.prepare(`
       INSERT INTO authorities (id, profile_id, role, organization_id, password_hash, must_change_password)
       VALUES (?, ?, 'Authorized Leave Officer', ?, ?, 0)
-    `).run(authId, authProfileId, orgId, defaultPassHash);
+    `).run(authId, authProfileId, 'org-bitm', defaultPassHash);
   } else {
     // Ensure password hash matches BITM1234 exactly
     const existingAuth = db.prepare('SELECT id FROM authorities WHERE profile_id = ?').get(existingAuthProfile.id);
