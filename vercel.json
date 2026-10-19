@@ -2,7 +2,15 @@
   "outputDirectory": "client/dist",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/api/:path*",
+      "destination": "https://digital-leave-backend.onrender.com/api/:path*"
+    },
+    {
+      "source": "/uploads/:path*",
+      "destination": "https://digital-leave-backend.onrender.com/uploads/:path*"
+    },
+    {
+      "source": "/((?!api|uploads).* flare|.*)",
       "destination": "/index.html"
     }
   ]
