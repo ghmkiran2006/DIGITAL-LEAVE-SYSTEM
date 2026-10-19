@@ -39,11 +39,14 @@ const authRoutes = require('./routes/auth.routes');
 const leaveRoutes = require('./routes/leave.routes');
 const qrRoutes = require('./routes/qr.routes');
 const studentMgmtRoutes = require('./routes/student-management.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/authority/students', studentMgmtRoutes);
+app.use('/api/admin', adminRoutes);
+
 
 // --- Notifications API ---
 app.get('/api/notifications', requireAuth, (req, res) => {

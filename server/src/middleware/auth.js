@@ -36,10 +36,19 @@ function requireAuthority(req, res, next) {
   next();
 }
 
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.userType !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Access denied. System Administrator privileges required.' });
+  }
+  next();
+}
+
 module.exports = {
   JWT_SECRET,
   generateToken,
   requireAuth,
   requireStudent,
-  requireAuthority
+  requireAuthority,
+  requireAdmin
 };
+

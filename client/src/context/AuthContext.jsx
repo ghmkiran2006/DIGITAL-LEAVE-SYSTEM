@@ -64,6 +64,22 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const loginAdmin = async (credentials) => {
+    setError(null);
+    try {
+      const res = await api.adminLogin(credentials);
+      if (res.success && res.token) {
+        setAuthToken(res.token);
+        setUser(res.user);
+        return res;
+      }
+      throw new Error(res.message || 'Admin login failed');
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
   const logout = () => {
     removeAuthToken();
     setUser(null);
@@ -88,8 +104,10 @@ export function AuthProvider({ children }) {
         error,
         isStudent: user?.userType === 'student',
         isAuthority: user?.userType === 'authority',
+        isAdmin: user?.userType === 'admin',
         loginStudent,
         loginAuthority,
+        loginAdmin,
         logout,
         refreshUser
       }}

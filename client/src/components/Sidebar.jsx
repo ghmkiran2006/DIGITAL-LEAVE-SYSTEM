@@ -23,7 +23,7 @@ import {
 import Avatar from './Avatar';
 
 export default function Sidebar({ currentPage, setCurrentPage, unreadCount }) {
-  const { user, isStudent, isAuthority, logout } = useAuth();
+  const { user, isStudent, isAuthority, isAdmin, logout } = useAuth();
 
   const studentNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -50,19 +50,31 @@ export default function Sidebar({ currentPage, setCurrentPage, unreadCount }) {
     { id: 'profile', label: 'Profile', icon: User }
   ];
 
-  const navItems = isStudent ? studentNavItems : authorityNavItems;
-  const brandShort = user?.organizationShortName || 'BITM';
-  const appTitle = user?.appName || 'Digital Leave';
+  const adminNavItems = [
+    { id: 'admin-dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
+    { id: 'admin-organisations', label: 'Organisations', icon: Building2 },
+    { id: 'admin-authorities', label: 'Authority Management', icon: Users },
+    { id: 'admin-audit-logs', label: 'System Audit Trail', icon: ShieldAlert },
+    { id: 'admin-security', label: 'Security & Access', icon: ShieldAlert },
+    { id: 'admin-profile', label: 'Admin Profile', icon: User }
+  ];
+
+  const navItems = isAdmin ? adminNavItems : (isStudent ? studentNavItems : authorityNavItems);
+  const brandShort = isAdmin ? 'Super Admin' : (user?.organizationShortName || 'BITM');
+  const portalLabel = isAdmin ? 'Management Portal' : (isStudent ? 'Student Portal' : 'Authority ERP');
 
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="sidebar-logo-badge">
-          {isStudent ? <GraduationCap size={26} /> : <Building2 size={26} />}
+        <div
+          className="sidebar-logo-badge"
+          style={isAdmin ? { background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: '#fff' } : undefined}
+        >
+          {isAdmin ? <ShieldAlert size={26} /> : (isStudent ? <GraduationCap size={26} /> : <Building2 size={26} />)}
         </div>
         <div className="sidebar-title-group">
-          <h2>{brandShort} Leave</h2>
-          <span>{isStudent ? 'Student Portal' : 'Authority ERP'}</span>
+          <h2>{brandShort}</h2>
+          <span>{portalLabel}</span>
         </div>
       </div>
 
@@ -107,11 +119,13 @@ export default function Sidebar({ currentPage, setCurrentPage, unreadCount }) {
           <div className="user-mini-info">
             <div className="name">{user?.fullName}</div>
             <div className="role">
-              {isStudent
-                ? (user?.organizationType === 'School'
-                    ? `${user?.standard || user?.semester} Standard`
-                    : `USN: ${user?.usn}`)
-                : (user?.role || 'Authority')}
+              {isAdmin
+                ? `Admin ID: ${user?.adminId || 'SUPER'}`
+                : (isStudent
+                    ? (user?.organizationType === 'School'
+                        ? `${user?.standard || user?.semester} Standard`
+                        : `USN: ${user?.usn}`)
+                    : (user?.role || 'Authority'))}
             </div>
           </div>
           <button

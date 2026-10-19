@@ -11,7 +11,8 @@ import {
   QrCode,
   School,
   BookOpen,
-  ChevronDown
+  ChevronDown,
+  Shield
 } from 'lucide-react';
 
 const DEFAULT_ORGS = [
@@ -528,6 +529,61 @@ export default function LandingPage({ onSelectRole }) {
                   </div>
                 </div>
                 <ArrowRight size={18} color="#fbbf24" />
+              </button>
+
+              {/* Option 3: Admin Login */}
+              <button
+                onClick={() => onSelectRole('admin')}
+                id="select-admin-role"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.14) 0%, rgba(79, 70, 229, 0.22) 100%)',
+                  border: '1px solid rgba(139, 92, 246, 0.5)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '18px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  color: '#ffffff',
+                  transition: 'all 0.25s ease',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#a78bfa';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(124, 58, 237, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.5)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)';
+                }}
+              >
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 'var(--radius-md)',
+                    background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    flexShrink: 0
+                  }}
+                >
+                  <Shield size={24} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '1rem', color: '#ffffff' }}>
+                    Admin Login
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#cbd5e1' }}>
+                    System Administrator • Organisation & Authority Management
+                  </div>
+                </div>
+                <ArrowRight size={18} color="#a78bfa" />
               </button>
             </div>
           </div>

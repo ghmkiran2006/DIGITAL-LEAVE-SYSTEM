@@ -11,6 +11,7 @@ import NotificationModal from './components/NotificationModal';
 import LandingPage from './pages/LandingPage';
 import StudentLoginPage from './pages/StudentLoginPage';
 import AuthorityLoginPage from './pages/AuthorityLoginPage';
+import AdminLoginPage from './pages/AdminLoginPage';
 import StudentDashboard from './pages/StudentDashboard';
 import ApplyLeavePage from './pages/ApplyLeavePage';
 import MyLeavesPage from './pages/MyLeavesPage';
@@ -25,11 +26,19 @@ import SettingsPage from './pages/SettingsPage';
 import StudentManagementPage from './pages/StudentManagementPage';
 import StudentHelpPage from './pages/StudentHelpPage';
 
+// Admin Portal Pages
+import AdminDashboard from './pages/AdminDashboard';
+import AdminOrganisationsPage from './pages/AdminOrganisationsPage';
+import AdminAuthoritiesPage from './pages/AdminAuthoritiesPage';
+import AdminAuditLogsPage from './pages/AdminAuditLogsPage';
+import AdminSecurityPage from './pages/AdminSecurityPage';
+import AdminProfilePage from './pages/AdminProfilePage';
+
 export default function App() {
-  const { user, loading, isStudent, isAuthority } = useAuth();
+  const { user, loading, isStudent, isAuthority, isAdmin } = useAuth();
   
   // Navigation & View State
-  const [authView, setAuthView] = useState('landing'); // 'landing' | 'student-login' | 'authority-login'
+  const [authView, setAuthView] = useState('landing'); // 'landing' | 'student-login' | 'authority-login' | 'admin-login'
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [selectedLeaveId, setSelectedLeaveId] = useState(null);
   
@@ -62,12 +71,14 @@ export default function App() {
 
   // Adjust default landing page based on role
   useEffect(() => {
-    if (isStudent) {
+    if (isAdmin) {
+      setCurrentPage('admin-dashboard');
+    } else if (isStudent) {
       setCurrentPage('dashboard');
     } else if (isAuthority) {
       setCurrentPage('authority-dashboard');
     }
-  }, [isStudent, isAuthority]);
+  }, [isAdmin, isStudent, isAuthority]);
 
   if (loading) {
     return (
@@ -101,11 +112,21 @@ export default function App() {
       );
     }
 
+    if (authView === 'admin-login') {
+      return (
+        <AdminLoginPage
+          onBack={() => setAuthView('landing')}
+          onLoginSuccess={() => setCurrentPage('admin-dashboard')}
+        />
+      );
+    }
+
     return (
       <LandingPage
         onSelectRole={(role) => {
           if (role === 'student') setAuthView('student-login');
           if (role === 'authority') setAuthView('authority-login');
+          if (role === 'admin') setAuthView('admin-login');
         }}
       />
     );
@@ -240,6 +261,26 @@ export default function App() {
           );
         default:
           return <AuthorityDashboard onNavigate={setCurrentPage} onSelectLeave={setSelectedLeaveId} />;
+      }
+    }
+
+    // ADMIN ROUTES
+    if (isAdmin) {
+      switch (currentPage) {
+        case 'admin-dashboard':
+          return <AdminDashboard onNavigate={(page) => setCurrentPage(page)} />;
+        case 'admin-organisations':
+          return <AdminOrganisationsPage />;
+        case 'admin-authorities':
+          return <AdminAuthoritiesPage />;
+        case 'admin-audit-logs':
+          return <AdminAuditLogsPage />;
+        case 'admin-security':
+          return <AdminSecurityPage />;
+        case 'admin-profile':
+          return <AdminProfilePage />;
+        default:
+          return <AdminDashboard onNavigate={(page) => setCurrentPage(page)} />;
       }
     }
 

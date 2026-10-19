@@ -180,7 +180,53 @@ function initSchema() {
       details TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS admins (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL UNIQUE,
+      admin_id TEXT NOT NULL UNIQUE,
+      role TEXT NOT NULL DEFAULT 'SYSTEM_ADMIN',
+      password_hash TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE', 'SUSPENDED')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_invitations (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      email TEXT,
+      created_by TEXT,
+      used INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
+
+  // Migrate profiles check constraint if 'admin' is not included
+  try {
+    const profTable = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='profiles'").get();
+    if (profTable && profTable.sql && !profTable.sql.includes("'admin'")) {
+      db.exec('PRAGMA foreign_keys = OFF;');
+      db.exec(`
+        CREATE TABLE profiles_v2 (
+          id TEXT PRIMARY KEY,
+          user_type TEXT NOT NULL CHECK(user_type IN ('student', 'authority', 'admin')),
+          full_name TEXT NOT NULL,
+          email TEXT UNIQUE,
+          mobile_number TEXT,
+          profile_photo TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO profiles_v2 SELECT * FROM profiles;
+        DROP TABLE profiles;
+        ALTER TABLE profiles_v2 RENAME TO profiles;
+      `);
+      db.exec('PRAGMA foreign_keys = ON;');
+    }
+  } catch (migErr) {
+    console.error('Profile table migration notice:', migErr.message);
+  }
 
   // Migrate columns gracefully if needed
   const migrations = [
@@ -191,6 +237,9 @@ function initSchema() {
     `ALTER TABLE organizations ADD COLUMN email TEXT`,
     `ALTER TABLE organizations ADD COLUMN phone TEXT`,
     `ALTER TABLE organizations ADD COLUMN website TEXT`,
+    `ALTER TABLE organizations ADD COLUMN status TEXT DEFAULT 'ACTIVE'`,
+    `ALTER TABLE authorities ADD COLUMN status TEXT DEFAULT 'ACTIVE'`,
+    `ALTER TABLE authorities ADD COLUMN authority_id_code TEXT`,
     `ALTER TABLE students ADD COLUMN organization_id TEXT NOT NULL DEFAULT 'org-bitm'`,
     `ALTER TABLE students ADD COLUMN standard TEXT`,
     `ALTER TABLE students ADD COLUMN section TEXT`,
@@ -351,6 +400,33 @@ function seedData() {
   } catch (e) {
     // ignore
   }
+
+  // --- SEED INITIAL SYSTEM ADMINISTRATOR (If none exists) ---
+  const existingAdmin = db.prepare('SELECT id FROM admins LIMIT 1').get();
+  if (!existingAdmin) {
+    const adminProfId = 'prof-system-admin-01';
+    const adminId = 'adm-system-admin-01';
+    const adminPassHash = bcrypt.hashSync('Admin@1234', 10);
+
+    const existingProf = db.prepare('SELECT id FROM profiles WHERE LOWER(email) = ?').get('admin@system.local');
+    if (!existingProf) {
+      db.prepare(`
+        INSERT INTO profiles (id, user_type, full_name, email, mobile_number, profile_photo)
+        VALUES (?, 'admin', 'System Administrator', 'admin@system.local', '+91 99000 00001', '')
+      `).run(adminProfId);
+
+      db.prepare(`
+        INSERT INTO admins (id, profile_id, admin_id, role, password_hash, status)
+        VALUES (?, ?, 'ADMIN-001', 'Super System Administrator', ?, 'ACTIVE')
+      `).run(adminId, adminProfId, adminPassHash);
+    }
+  }
+
+  // Seed default admin authorization / setup key if none exists
+  db.prepare(`
+    INSERT OR IGNORE INTO admin_invitations (id, code, email, created_by, used, expires_at)
+    VALUES ('inv-setup-01', 'ADMIN-SETUP-KEY-2026', 'admin@system.local', 'system', 0, '2099-12-31')
+  `).run();
 }
 
 // Background Expiry Engine: checks verification deadlines and auto-rejects

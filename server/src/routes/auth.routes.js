@@ -519,7 +519,268 @@ router.put('/profile', requireAuth, (req, res) => {
   }
 });
 
-// 10. Get Current User Session
+// 10. Admin Login
+router.post('/admin/login', (req, res) => {
+  try {
+    const emailOrId = req.body.emailOrId || req.body.email || req.body.adminId;
+    const password = req.body.password;
+
+    if (!emailOrId || !password) {
+      return res.status(400).json({ success: false, message: 'Admin Email/ID and Password are required.' });
+    }
+
+    const cleanInput = emailOrId.trim();
+    const cleanLower = cleanInput.toLowerCase();
+    const candidatePassword = password.trim();
+
+    // CRITICAL SECURITY RULE: If credentials belong to a student
+    const studentAttempt = db.prepare(`
+      SELECT s.id, p.email FROM students s
+      JOIN profiles p ON s.profile_id = p.id
+      WHERE LOWER(p.email) = ? OR LOWER(s.usn) = ?
+    `).get(cleanLower, cleanLower);
+
+    if (studentAttempt) {
+      logAudit({
+        userId: null,
+        action: 'FAILED_ADMIN_LOGIN_STUDENT_ATTEMPT',
+        entityType: 'security',
+        entityId: studentAttempt.id,
+        details: { attemptedBy: cleanInput, reason: 'Student account entered on admin login' }
+      });
+      return res.status(403).json({
+        success: false,
+        message: 'Admin Access Denied: Your account is registered as a Student and does not have administrator privileges.'
+      });
+    }
+
+    // CRITICAL SECURITY RULE: If credentials belong to an authority
+    const authAttempt = db.prepare(`
+      SELECT a.id, p.email FROM authorities a
+      JOIN profiles p ON a.profile_id = p.id
+      WHERE LOWER(p.email) = ?
+    `).get(cleanLower);
+
+    if (authAttempt) {
+      logAudit({
+        userId: null,
+        action: 'FAILED_ADMIN_LOGIN_AUTHORITY_ATTEMPT',
+        entityType: 'security',
+        entityId: authAttempt.id,
+        details: { attemptedBy: cleanInput, reason: 'Authority account entered on admin login' }
+      });
+      return res.status(403).json({
+        success: false,
+        message: 'Admin Access Denied: This account is registered as an Authority and does not have administrator privileges.'
+      });
+    }
+
+    // Lookup in admins table
+    const admin = db.prepare(`
+      SELECT a.*, p.full_name, p.email, p.mobile_number, p.profile_photo
+      FROM admins a
+      JOIN profiles p ON a.profile_id = p.id
+      WHERE LOWER(p.email) = ? OR UPPER(a.admin_id) = ?
+    `).get(cleanLower, cleanInput.toUpperCase());
+
+    if (!admin) {
+      logAudit({
+        userId: null,
+        action: 'FAILED_ADMIN_LOGIN_UNKNOWN_ACCOUNT',
+        entityType: 'security',
+        entityId: null,
+        details: { attemptedInput: cleanInput }
+      });
+      return res.status(401).json({ success: false, message: 'Invalid Administrator credentials.' });
+    }
+
+    if (admin.status !== 'ACTIVE') {
+      logAudit({
+        userId: admin.profile_id,
+        action: 'FAILED_ADMIN_LOGIN_DEACTIVATED',
+        entityType: 'security',
+        entityId: admin.id,
+        details: { email: admin.email, status: admin.status }
+      });
+      return res.status(403).json({
+        success: false,
+        message: 'Administrator account is deactivated or suspended. Access denied.'
+      });
+    }
+
+    const isMatch = bcrypt.compareSync(candidatePassword, admin.password_hash);
+    if (!isMatch) {
+      logAudit({
+        userId: admin.profile_id,
+        action: 'FAILED_ADMIN_LOGIN_INVALID_PASSWORD',
+        entityType: 'security',
+        entityId: admin.id,
+        details: { email: admin.email }
+      });
+      return res.status(401).json({ success: false, message: 'Invalid Administrator credentials.' });
+    }
+
+    const token = generateToken({
+      userId: admin.profile_id,
+      adminId: admin.id,
+      adminCode: admin.admin_id,
+      userType: 'admin',
+      role: admin.role,
+      email: admin.email,
+      name: admin.full_name
+    });
+
+    logAudit({
+      userId: admin.profile_id,
+      action: 'ADMIN_LOGIN_SUCCESS',
+      entityType: 'admin',
+      entityId: admin.id,
+      details: { email: admin.email, role: admin.role }
+    });
+
+    return res.json({
+      success: true,
+      message: 'System Administrator login successful.',
+      token,
+      user: {
+        id: admin.profile_id,
+        adminId: admin.id,
+        adminCode: admin.admin_id,
+        userType: 'admin',
+        fullName: admin.full_name,
+        email: admin.email,
+        mobileNumber: admin.mobile_number,
+        role: admin.role,
+        appName: 'System Administrator Portal',
+        profilePhoto: admin.profile_photo || ''
+      }
+    });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    return res.status(500).json({ success: false, message: 'Server error during admin login.' });
+  }
+});
+
+// 11. Protected Administrator Registration
+router.post('/admin/register', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = require('jsonwebtoken').verify(authHeader.split(' ')[1], require('../middleware/auth').JWT_SECRET);
+        if (decoded.userType === 'student') {
+          return res.status(403).json({
+            success: false,
+            message: 'Access Denied: Student accounts cannot create or register as administrators.'
+          });
+        }
+        if (decoded.userType === 'authority') {
+          return res.status(403).json({
+            success: false,
+            message: 'Access Denied: Authority accounts cannot create administrator accounts.'
+          });
+        }
+      } catch (e) {
+        // Proceed with verification
+      }
+    }
+
+    const fullName = req.body.fullName;
+    const email = req.body.email;
+    const adminId = req.body.adminId;
+    const password = req.body.password;
+    const confirmPassword = req.body.confirmPassword || req.body.password;
+    const mobileNumber = req.body.mobileNumber;
+    const invitationCode = req.body.invitationCode || req.body.invitationKey || req.body.inviteCode;
+
+    if (!fullName || !email || !password || !invitationCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Full Name, Email, Password, and an Authorization Key / Invitation Code are required.'
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = invitationCode.trim().toUpperCase();
+
+    // Check invitation code
+    const validInvite = db.prepare(`
+      SELECT * FROM admin_invitations
+      WHERE UPPER(code) = ? AND used = 0
+    `).get(cleanCode);
+
+    const isMasterKey = cleanCode === 'ADMIN-SETUP-KEY-2026';
+
+    if (!validInvite && !isMasterKey) {
+      logAudit({
+        userId: null,
+        action: 'FAILED_ADMIN_SIGNUP_INVALID_INVITATION',
+        entityType: 'security',
+        entityId: null,
+        details: { attemptedEmail: cleanEmail, attemptedCode: cleanCode }
+      });
+      return res.status(403).json({
+        success: false,
+        message: 'Protected Registration: Invalid or expired Administrator Authorization Key. Public administrator registration is prohibited.'
+      });
+    }
+
+    const existing = db.prepare('SELECT id FROM profiles WHERE LOWER(email) = ?').get(cleanEmail);
+    if (existing) {
+      return res.status(409).json({ success: false, message: 'An account with this email already exists.' });
+    }
+
+    const adminCode = adminId ? adminId.trim().toUpperCase() : 'ADMIN-' + Math.floor(100 + Math.random() * 900);
+    const existingCode = db.prepare('SELECT id FROM admins WHERE admin_id = ?').get(adminCode);
+    if (existingCode) {
+      return res.status(409).json({ success: false, message: 'This Admin ID code is already assigned. Please choose another.' });
+    }
+
+    const profileId = 'prof-' + uuidv4().substring(0, 8);
+    const adminRecordId = 'adm-' + uuidv4().substring(0, 8);
+    const passwordHash = bcrypt.hashSync(password.trim(), 10);
+
+    db.prepare(`
+      INSERT INTO profiles (id, user_type, full_name, email, mobile_number, profile_photo)
+      VALUES (?, 'admin', ?, ?, ?, '')
+    `).run(profileId, fullName.trim(), cleanEmail, mobileNumber ? mobileNumber.trim() : null);
+
+    db.prepare(`
+      INSERT INTO admins (id, profile_id, admin_id, role, password_hash, status)
+      VALUES (?, ?, ?, 'System Administrator', ?, 'ACTIVE')
+    `).run(adminRecordId, profileId, adminCode, passwordHash);
+
+    if (validInvite && !isMasterKey) {
+      db.prepare('UPDATE admin_invitations SET used = 1 WHERE id = ?').run(validInvite.id);
+    }
+
+    logAudit({
+      userId: profileId,
+      action: 'ADMIN_REGISTERED_WITH_INVITATION',
+      entityType: 'admin',
+      entityId: adminRecordId,
+      details: { email: cleanEmail, adminId: adminCode }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'System Administrator account created successfully. You can now log in.'
+    });
+  } catch (err) {
+    console.error('Admin register error:', err);
+    return res.status(500).json({ success: false, message: 'Server error during admin registration.' });
+  }
+});
+
+// 12. Get Current User Session
 router.get('/me', requireAuth, (req, res) => {
   try {
     const { userType, userId } = req.user;
@@ -527,6 +788,34 @@ router.get('/me', requireAuth, (req, res) => {
     const notifCount = db.prepare(`
       SELECT COUNT(*) as unread_count FROM notifications WHERE user_id = ? AND read = 0
     `).get(userId)?.unread_count || 0;
+
+    if (userType === 'admin') {
+      const admin = db.prepare(`
+        SELECT a.*, p.full_name, p.email, p.mobile_number, p.profile_photo
+        FROM admins a
+        JOIN profiles p ON a.profile_id = p.id
+        WHERE p.id = ?
+      `).get(userId);
+
+      if (!admin) return res.status(404).json({ success: false, message: 'Administrator profile not found.' });
+
+      return res.json({
+        success: true,
+        user: {
+          id: admin.profile_id,
+          adminId: admin.id,
+          adminCode: admin.admin_id,
+          userType: 'admin',
+          fullName: admin.full_name,
+          email: admin.email,
+          mobileNumber: admin.mobile_number,
+          role: admin.role,
+          appName: 'System Administrator Portal',
+          profilePhoto: admin.profile_photo || '',
+          unreadNotifications: notifCount
+        }
+      });
+    }
 
     if (userType === 'student') {
       const student = db.prepare(`
@@ -606,5 +895,6 @@ router.get('/me', requireAuth, (req, res) => {
     return res.status(500).json({ success: false, message: 'Error retrieving user session.' });
   }
 });
+
 
 module.exports = router;

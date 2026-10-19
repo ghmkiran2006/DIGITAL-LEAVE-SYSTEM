@@ -4,7 +4,7 @@ import { Bell, Calendar, ShieldCheck, UserCheck, RotateCw, Download, Check } fro
 import Avatar from './Avatar';
 
 export default function Navbar({ onOpenNotifications, unreadCount, onRefresh }) {
-  const { user, isStudent } = useAuth();
+  const { user, isStudent, isAdmin } = useAuth();
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -70,14 +70,18 @@ export default function Navbar({ onOpenNotifications, unreadCount, onRefresh }) 
     year: 'numeric'
   });
 
-  const orgName = user?.organizationName || 'Ballari Institute of Technology and Management';
+  const orgName = isAdmin ? 'System Administration ERP (Master Portal)' : (user?.organizationName || 'Ballari Institute of Technology and Management');
 
   return (
     <header className="top-navbar">
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div className="brand-badge-pill" title={orgName}>
-          <ShieldCheck size={16} color="var(--accent-gold)" />
-          <span style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div
+          className="brand-badge-pill"
+          title={orgName}
+          style={isAdmin ? { border: '1px solid #7c3aed', background: '#f5f3ff', color: '#7c3aed' } : undefined}
+        >
+          <ShieldCheck size={16} color={isAdmin ? '#7c3aed' : 'var(--accent-gold)'} />
+          <span style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isAdmin ? 700 : undefined }}>
             {orgName}
           </span>
         </div>
@@ -139,11 +143,13 @@ export default function Navbar({ onOpenNotifications, unreadCount, onRefresh }) 
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
               <UserCheck size={12} color="var(--success)" />
-              {isStudent
-                ? (user?.organizationType === 'School'
-                    ? `${user?.standard || user?.semester} Standard`
-                    : `Sem ${user?.semester} (${user?.department})`)
-                : user?.role}
+              {isAdmin
+                ? `Admin (${user?.adminId || 'SUPER'})`
+                : (isStudent
+                    ? (user?.organizationType === 'School'
+                        ? `${user?.standard || user?.semester} Standard`
+                        : `Sem ${user?.semester} (${user?.department})`)
+                    : user?.role)}
             </div>
           </div>
           <Avatar

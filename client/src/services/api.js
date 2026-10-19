@@ -164,5 +164,72 @@ export const api = {
   createDepartment: (data) => request('/departments', {
     method: 'POST',
     body: JSON.stringify(data)
+  }),
+
+  // Admin Portal & Authentication
+  adminLogin: (credentials) => request('/auth/admin/login', {
+    method: 'POST',
+    body: JSON.stringify(credentials)
+  }),
+  adminRegister: (data) => request('/auth/admin/register', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  getAdminStats: () => request('/admin/stats'),
+  getAdminOrganizations: () => request('/admin/organizations'),
+  createAdminOrganization: (data) => request('/admin/organizations', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  updateAdminOrganization: (id, data) => request(`/admin/organizations/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  toggleOrganizationStatus: (id) => request(`/admin/organizations/${id}/toggle-status`, {
+    method: 'POST'
+  }),
+  deleteAdminOrganization: (id) => request(`/admin/organizations/${id}`, {
+    method: 'DELETE'
+  }),
+  getAdminAuthorities: () => request('/admin/authorities'),
+  createAdminAuthority: (data) => request('/admin/authorities', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  updateAdminAuthority: (id, data) => request(`/admin/authorities/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  resetAuthorityPassword: (id, newPassword) => request(`/admin/authorities/${id}/reset-password`, {
+    method: 'POST',
+    body: JSON.stringify({ newPassword })
+  }),
+  toggleAuthorityStatus: (id) => request(`/admin/authorities/${id}/toggle-status`, {
+    method: 'POST'
+  }),
+  deleteAdminAuthority: (id) => request(`/admin/authorities/${id}`, {
+    method: 'DELETE'
+  }),
+  getAdminAuditLogs: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/admin/audit-logs?${q}`);
+  },
+  getAdminSecurityEvents: () => request('/admin/security-events'),
+  getAdminList: () => request('/admin/admins'),
+  createAdminUser: (data) => request('/admin/admins', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  generateAdminInviteCode: (email) => request('/admin/invite-code', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  }),
+  updateAdminProfile: (data) => request('/admin/profile', {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  changeAdminPassword: (currentPassword, newPassword) => request('/admin/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword })
   })
 };
