@@ -504,6 +504,12 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 0 3px rgba(29, 91, 150, 0.15);
 }
 
+select.form-control option {
+  background-color: #0f172a;
+  color: #f8fafc;
+  padding: 8px 12px;
+}
+
 /* Upload Dropzone */
 .dropzone {
   border: 2px dashed #cbd5e1;

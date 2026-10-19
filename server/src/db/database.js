@@ -220,23 +220,50 @@ function initSchema() {
 }
 
 function seedData() {
-  const orgId = 'org-bitm';
-  const org = db.prepare('SELECT id FROM organizations WHERE id = ?').get(orgId);
-  if (!org) {
-    db.prepare(`
-      INSERT INTO organizations (id, name, short_name, organization_type, app_name, address, email, phone)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      orgId,
-      'Ballari Institute of Technology and Management',
-      'BITM',
-      'College',
-      'BITM Smart Leave System',
-      'Jnana Gangotri Campus, Bellary-Hospet Road, Ballari, Karnataka 583104',
-      'principal@bitm.edu.in',
-      '+91 83922 24800'
-    );
-  }
+  // Seed primary College: Ballari Institute of Technology and Management
+  db.prepare(`
+    INSERT OR IGNORE INTO organizations (id, name, short_name, organization_type, app_name, address, email, phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'org-bitm',
+    'Ballari Institute of Technology and Management',
+    'BITM',
+    'College',
+    'BITM Smart Leave System',
+    'Jnana Gangotri Campus, Bellary-Hospet Road, Ballari, Karnataka 583104',
+    'principal@bitm.edu.in',
+    '+91 83922 24800'
+  );
+
+  // Seed School: BITM Central Public School
+  db.prepare(`
+    INSERT OR IGNORE INTO organizations (id, name, short_name, organization_type, app_name, address, email, phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'org-school',
+    'BITM Central Public School & PU College',
+    'BITM-School',
+    'School',
+    'BITM School Leave System',
+    'Jnana Gangotri Campus, Ballari, Karnataka 583104',
+    'school@bitm.edu.in',
+    '+91 83922 24810'
+  );
+
+  // Seed University: BITM Deemed University
+  db.prepare(`
+    INSERT OR IGNORE INTO organizations (id, name, short_name, organization_type, app_name, address, email, phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'org-univ',
+    'BITM Deemed University',
+    'BITM-Univ',
+    'University',
+    'BITM University Leave System',
+    'University Campus, Ballari, Karnataka 583104',
+    'registrar@bitm.edu.in',
+    '+91 83922 24820'
+  );
 
   // Seed default college departments for BITM
   const departments = [
@@ -255,7 +282,35 @@ function seedData() {
     VALUES (?, ?, ?, ?, 'department')
   `);
   for (const dept of departments) {
-    insertDept.run(dept.id, orgId, dept.code, dept.name);
+    insertDept.run(dept.id, 'org-bitm', dept.code, dept.name);
+  }
+
+  // Seed School Standards (1st to 10th) for org-school
+  const schoolStandards = [
+    { id: 'std-1', code: '1st Std', name: '1st Standard' },
+    { id: 'std-2', code: '2nd Std', name: '2nd Standard' },
+    { id: 'std-3', code: '3rd Std', name: '3rd Standard' },
+    { id: 'std-4', code: '4th Std', name: '4th Standard' },
+    { id: 'std-5', code: '5th Std', name: '5th Standard' },
+    { id: 'std-6', code: '6th Std', name: '6th Standard' },
+    { id: 'std-7', code: '7th Std', name: '7th Standard' },
+    { id: 'std-8', code: '8th Std', name: '8th Standard' },
+    { id: 'std-9', code: '9th Std', name: '9th Standard' },
+    { id: 'std-10', code: '10th Std', name: '10th Standard' }
+  ];
+  for (const std of schoolStandards) {
+    insertDept.run(`school-${std.id}`, 'org-school', std.code, std.name);
+  }
+
+  // Seed University Academic Divisions for org-univ
+  const univDivisions = [
+    { id: 'univ-eng', code: 'SOE', name: 'School of Engineering & Technology' },
+    { id: 'univ-comp', code: 'SOCA', name: 'School of Computer Applications' },
+    { id: 'univ-mgmt', code: 'SOM', name: 'School of Management Studies' },
+    { id: 'univ-sci', code: 'SOAS', name: 'School of Applied Sciences' }
+  ];
+  for (const div of univDivisions) {
+    insertDept.run(`univ-${div.id}`, 'org-univ', div.code, div.name);
   }
 
   // EXACT DEFAULT AUTHORITY CREDENTIALS:

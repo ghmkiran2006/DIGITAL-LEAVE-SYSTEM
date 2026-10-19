@@ -1,20 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { GraduationCap, ArrowLeft, AlertCircle, Building2, Calendar, Sparkles } from 'lucide-react';
+import { GraduationCap, ArrowLeft, AlertCircle, Building2, Calendar, Sparkles, ChevronDown } from 'lucide-react';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const DEFAULT_ORGS = [
+  { id: 'org-bitm', name: 'Ballari Institute of Technology and Management', short_name: 'BITM', organization_type: 'College' },
+  { id: 'org-school', name: 'BITM Central Public School & PU College', short_name: 'BITM-School', organization_type: 'School' },
+  { id: 'org-univ', name: 'BITM Deemed University', short_name: 'BITM-Univ', organization_type: 'University' }
+];
+
 export default function StudentLoginPage({ onBack, onLoginSuccess }) {
   const { loginStudent } = useAuth();
   
   // Organization / Institution Selection
-  const [organizations, setOrganizations] = useState([]);
-  const [selectedOrgId, setSelectedOrgId] = useState('');
-  const [selectedOrg, setSelectedOrg] = useState(null);
+  const [organizations, setOrganizations] = useState(DEFAULT_ORGS);
+  const [selectedOrgId, setSelectedOrgId] = useState('org-bitm');
+  const [selectedOrg, setSelectedOrg] = useState(DEFAULT_ORGS[0]);
 
   // Student Input Fields
   const [usn, setUsn] = useState('');
@@ -28,15 +34,22 @@ export default function StudentLoginPage({ onBack, onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Load organizations
+  // Load organizations from server
   useEffect(() => {
     async function loadOrgs() {
       try {
         const res = await api.getOrganizations();
         if (res.success && res.organizations?.length > 0) {
           setOrganizations(res.organizations);
-          setSelectedOrgId(res.organizations[0].id);
-          setSelectedOrg(res.organizations[0]);
+          setSelectedOrgId((prev) => {
+            const found = res.organizations.find((o) => o.id === prev);
+            if (found) {
+              setSelectedOrg(found);
+              return prev;
+            }
+            setSelectedOrg(res.organizations[0]);
+            return res.organizations[0].id;
+          });
         }
       } catch (err) {
         console.error('Failed to load institutions:', err);
@@ -312,22 +325,46 @@ export default function StudentLoginPage({ onBack, onLoginSuccess }) {
                   value={selectedOrgId}
                   onChange={handleOrgChange}
                   style={{
-                    background: 'rgba(15, 23, 42, 0.9)',
+                    background: '#0d1829',
                     color: '#f8fafc',
-                    borderColor: 'rgba(59, 130, 246, 0.35)',
-                    paddingLeft: 38
+                    colorScheme: 'dark',
+                    borderColor: 'rgba(59, 130, 246, 0.45)',
+                    paddingLeft: 42,
+                    paddingRight: 40,
+                    height: 48,
+                    fontSize: '0.92rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none'
                   }}
                 >
                   {organizations.map((org) => (
-                    <option key={org.id} value={org.id} style={{ background: '#0f172a', color: '#f8fafc' }}>
+                    <option
+                      key={org.id}
+                      value={org.id}
+                      style={{
+                        background: '#0d1829',
+                        color: '#f8fafc',
+                        padding: '12px 14px',
+                        fontSize: '0.92rem',
+                        fontWeight: 500
+                      }}
+                    >
                       {org.name} ({org.organization_type})
                     </option>
                   ))}
                 </select>
                 <Building2
-                  size={16}
+                  size={18}
                   color="#60a5fa"
-                  style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+                  style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+                />
+                <ChevronDown
+                  size={18}
+                  color="#60a5fa"
+                  style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
                 />
               </div>
             </div>
