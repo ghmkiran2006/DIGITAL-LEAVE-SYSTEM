@@ -10,7 +10,7 @@
       "destination": "https://digital-leave-backend.onrender.com/uploads/:path*"
     },
     {
-      "source": "/((?!api|uploads).* flare|.*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
