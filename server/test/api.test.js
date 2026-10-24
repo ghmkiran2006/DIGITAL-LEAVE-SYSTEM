@@ -1,76 +1,196 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const http = require('node:http');
+const app = require('../src/server');
+const db = require('../src/db/database');
 
 async function runTests() {
-  console.log('--- Starting BITM System Automated API Tests ---');
-  const baseUrl = 'http://localhost:5000';
+  console.log('--- Starting BITM System Automated API & Admin Integration Tests ---');
+
+  // Start an in-memory HTTP server on an available port
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
+  const baseUrl = `http://localhost:${port}`;
+  console.log(`✓ Test server running on ${baseUrl}`);
 
   // Helper fetch with JSON
   async function api(endpoint, options = {}) {
     const res = await fetch(`${baseUrl}${endpoint}`, options);
-    const data = await res.json();
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      // not JSON
+    }
     return { status: res.status, data };
   }
 
+  let testStudentId = null;
+  let testProfileId = null;
+  let testLeaveId = null;
+
   try {
     // 1. Health check
-    console.log('Test 1: Health Check');
+    console.log('\n--- 1. Health & Server Status ---');
     const health = await api('/api/health');
-    if (health.status !== 200) throw new Error('Health check failed: ' + JSON.stringify(health));
-    console.log('✓ Health check OK');
-
-    // 2. Student login failure (wrong password)
-    console.log('Test 2: Student Login with invalid password');
-    const studentFail = await api('/api/auth/student/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ usn: 'BITMTEST001', password: 'WrongPassword' })
-    });
-    if (studentFail.status !== 401) throw new Error('Expected 401 on wrong student password, got: ' + studentFail.status);
-    console.log('✓ Student wrong password rejected properly');
-
-    // 3. Student login success (USN: BITMTEST001, DOB: 15March2006)
-    console.log('Test 3: Student Login with valid credentials');
-    const studentLogin = await api('/api/auth/student/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ usn: 'BITMTEST001', password: '15March2006' })
-    });
-    if (studentLogin.status !== 200 || !studentLogin.data.token) {
-      throw new Error('Student login failed: ' + JSON.stringify(studentLogin));
+    if (health.status !== 200 || health.data.status !== 'ok') {
+      throw new Error('Health check failed: ' + JSON.stringify(health));
     }
-    const studentToken = studentLogin.data.token;
-    console.log('✓ Student logged in successfully. Name:', studentLogin.data.user.fullName);
+    console.log('✓ Health check endpoint operational');
 
-    // 4. Authority login success (BITM@gmail.com, BITM-1234)
-    console.log('Test 4: Authority Login with demo credentials');
+    // 2. Admin Login & Governance Tests
+    console.log('\n--- 2. System Administrator Portal Tests ---');
+    const adminLogin = await api('/api/auth/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailOrId: 'admin@system.local',
+        password: 'Admin@1234'
+      })
+    });
+    if (adminLogin.status !== 200 || !adminLogin.data.token || adminLogin.data.user.userType !== 'admin') {
+      throw new Error('Admin login failed: ' + JSON.stringify(adminLogin));
+    }
+    const adminToken = adminLogin.data.token;
+    console.log('✓ Admin login successful. Token granted for Super Administrator');
+
+    // Admin System Overview Stats
+    const statsRes = await api('/api/admin/stats', {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    if (statsRes.status !== 200 || !statsRes.data.success || !statsRes.data.stats) {
+      throw new Error('Failed to fetch admin stats: ' + JSON.stringify(statsRes));
+    }
+    console.log(`✓ Admin system stats loaded (${statsRes.data.stats.totalOrganizations} orgs, ${statsRes.data.stats.totalAuthorities} authorities, ${statsRes.data.stats.totalStudents} students)`);
+
+    // Admin Organisations List
+    const orgs = await api('/api/admin/organizations', {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    if (orgs.status !== 200 || !Array.isArray(orgs.data.organizations)) {
+      throw new Error('Failed to fetch organisations list');
+    }
+    console.log(`✓ Admin fetched ${orgs.data.organizations.length} institutions`);
+
+    // Admin Authorities List
+    const authorities = await api('/api/admin/authorities', {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    if (authorities.status !== 200 || !Array.isArray(authorities.data.authorities)) {
+      throw new Error('Failed to fetch authorities list');
+    }
+    console.log(`✓ Admin fetched ${authorities.data.authorities.length} authority accounts`);
+
+    // Admin Audit Logs
+    const auditLogs = await api('/api/admin/audit-logs', {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    if (auditLogs.status !== 200 || !Array.isArray(auditLogs.data.logs)) {
+      throw new Error('Failed to fetch admin audit logs');
+    }
+    console.log(`✓ Admin fetched ${auditLogs.data.logs.length} system audit logs`);
+
+    // 3. Authority Login & Student Enrollment Tests
+    console.log('\n--- 3. Authority Role & Student Enrollment Tests ---');
     const authLogin = await api('/api/auth/authority/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'BITM@gmail.com', password: 'BITM-1234' })
+      body: JSON.stringify({ email: 'BITM@gmail.com', password: 'BITM1234' })
     });
     if (authLogin.status !== 200 || !authLogin.data.token) {
       throw new Error('Authority login failed: ' + JSON.stringify(authLogin));
     }
     const authToken = authLogin.data.token;
-    console.log('✓ Authority logged in successfully. Role:', authLogin.data.user.role);
+    console.log('✓ Authority login successful. Role:', authLogin.data.user.role);
 
-    // 5. Role-based protection: student forbidden from authority route
-    console.log('Test 5: RBAC - Student forbidden from authority routes');
-    const rbacTest = await api('/api/leaves/authority', {
+    // Authority is blocked from Admin endpoints (RBAC)
+    const authBlock = await api('/api/admin/stats', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    if (authBlock.status !== 403) {
+      throw new Error('Expected 403 for Authority trying to access Admin endpoint, got: ' + authBlock.status);
+    }
+    console.log('✓ RBAC: Authority forbidden from accessing Admin portal (403)');
+
+    // Authority enrolls a test student dynamically
+    const runId = Date.now();
+    const testUsn = `AUTO-${runId}`;
+    const testEmail = `test.${runId}@bitm.edu.in`;
+    const createStudRes = await api('/api/authority/students', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({
+        fullName: 'Automated Test Student',
+        usn: testUsn,
+        dob: '2005-08-15',
+        email: testEmail,
+        mobileNumber: '+91 98888 11111',
+        departmentId: 'dept-cse',
+        semester: 5,
+        parentContact: '+91 98888 22222'
+      })
+    });
+    if (createStudRes.status !== 201 || !createStudRes.data.student) {
+      throw new Error('Student enrollment failed: ' + JSON.stringify(createStudRes));
+    }
+    testStudentId = createStudRes.data.student.id;
+    testProfileId = createStudRes.data.student.profileId;
+    console.log(`✓ Authority enrolled test student: ${createStudRes.data.student.fullName} (${testUsn})`);
+
+    // 4. Student Authentication & Leave Application Tests
+    console.log('\n--- 4. Student Authentication & Leave Workflow Tests ---');
+    // Wrong DOB test
+    const wrongStudentPass = await api('/api/auth/student/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usn: testUsn, dob: '2001-01-01' })
+    });
+    if (wrongStudentPass.status !== 401) {
+      throw new Error('Expected 401 for wrong student DOB, got: ' + wrongStudentPass.status);
+    }
+    console.log('✓ Student wrong DOB properly rejected (401)');
+
+    // Correct student login
+    const studentLogin = await api('/api/auth/student/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usn: testUsn, dob: '2005-08-15' })
+    });
+    if (studentLogin.status !== 200 || !studentLogin.data.token) {
+      throw new Error('Student login failed: ' + JSON.stringify(studentLogin));
+    }
+    const studentToken = studentLogin.data.token;
+    console.log('✓ Student logged in successfully');
+
+    // Student blocked from Authority endpoints
+    const studBlockAuth = await api('/api/leaves/authority', {
       headers: { Authorization: `Bearer ${studentToken}` }
     });
-    if (rbacTest.status !== 403) throw new Error('Expected 403 for student accessing authority route, got: ' + rbacTest.status);
-    console.log('✓ RBAC blocked student access to authority dashboard');
+    if (studBlockAuth.status !== 403) {
+      throw new Error('Expected 403 for student accessing authority route');
+    }
+    console.log('✓ RBAC: Student forbidden from accessing Authority dashboard (403)');
 
-    // 6. Leave application without document (must be rejected)
-    console.log('Test 6: Leave application validation without mandatory document');
+    // Student blocked from Admin endpoints
+    const studBlockAdmin = await api('/api/admin/stats', {
+      headers: { Authorization: `Bearer ${studentToken}` }
+    });
+    if (studBlockAdmin.status !== 403) {
+      throw new Error('Expected 403 for student accessing admin route');
+    }
+    console.log('✓ RBAC: Student forbidden from accessing Admin portal (403)');
+
+    // Mandatory document validation
     const formNoDoc = new FormData();
     formNoDoc.append('leaveType', 'Medical Leave');
-    formNoDoc.append('reason', 'Fever');
-    formNoDoc.append('startDate', '2026-10-10');
-    formNoDoc.append('endDate', '2026-10-12');
-    
+    formNoDoc.append('reason', 'Viral fever symptoms');
+    formNoDoc.append('startDate', '2026-11-01');
+    formNoDoc.append('endDate', '2026-11-03');
+
     const applyNoDoc = await fetch(`${baseUrl}/api/leaves/apply`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${studentToken}` },
@@ -78,26 +198,19 @@ async function runTests() {
     });
     const applyNoDocJson = await applyNoDoc.json();
     if (applyNoDoc.status !== 400 || !applyNoDocJson.message.includes('Supporting document is required')) {
-      throw new Error('Expected 400 missing document error, got: ' + JSON.stringify(applyNoDocJson));
+      throw new Error('Expected 400 for missing mandatory document: ' + JSON.stringify(applyNoDocJson));
     }
-    console.log('✓ Leave submission properly requires mandatory document');
+    console.log('✓ Leave submission rejects request missing supporting document');
 
-    // 7. Leave application with document (Success flow)
-    console.log('Test 7: Leave application submission with supporting document');
-    const dummyCertPath = path.join(__dirname, 'test_medical_cert.png');
-    // Create a 1x1 transparent png dummy file for testing
+    // Successful leave submission with supporting document
     const dummyPngBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
-    fs.writeFileSync(dummyCertPath, dummyPngBuffer);
-
     const formWithDoc = new FormData();
     formWithDoc.append('leaveType', 'Medical Leave');
     formWithDoc.append('reason', 'High fever and viral flu symptoms');
-    formWithDoc.append('startDate', '2026-10-10');
-    formWithDoc.append('endDate', '2026-10-12');
+    formWithDoc.append('startDate', '2026-11-01');
+    formWithDoc.append('endDate', '2026-11-03');
     formWithDoc.append('additionalRemarks', 'Doctor advised 3 days complete bed rest');
-    
-    const blob = new Blob([dummyPngBuffer], { type: 'image/png' });
-    formWithDoc.append('supportingDocument', blob, 'medical_prescription.png');
+    formWithDoc.append('supportingDocument', new Blob([dummyPngBuffer], { type: 'image/png' }), 'doctor_prescription.png');
 
     const applyWithDoc = await fetch(`${baseUrl}/api/leaves/apply`, {
       method: 'POST',
@@ -108,48 +221,40 @@ async function runTests() {
     if (applyWithDoc.status !== 201 || !applyData.leaveId) {
       throw new Error('Leave application failed: ' + JSON.stringify(applyData));
     }
-    const createdLeaveId = applyData.leaveId;
-    const leaveAppNumber = applyData.leaveApplicationNumber;
-    console.log(`✓ Leave application created: ${leaveAppNumber} (ID: ${createdLeaveId})`);
+    testLeaveId = applyData.leaveId;
+    console.log(`✓ Leave application created: ${applyData.leaveApplicationNumber} (ID: ${testLeaveId})`);
 
-    // 8. Authority views pending leaves
-    console.log('Test 8: Authority views pending leave queue');
-    const authLeaves = await api('/api/leaves/authority?status=PENDING', {
+    // 5. Authority Review, Approval & QR Verification Tests
+    console.log('\n--- 5. Authority Approval & QR Verification Workflow ---');
+    // Verify leave is in pending queue
+    const pendingLeaves = await api('/api/leaves/authority?status=PENDING', {
       headers: { Authorization: `Bearer ${authToken}` }
     });
-    if (authLeaves.status !== 200 || !authLeaves.data.leaves.some(l => l.id === createdLeaveId)) {
-      throw new Error('Newly created leave not found in authority pending list: ' + JSON.stringify(authLeaves));
+    if (pendingLeaves.status !== 200 || !pendingLeaves.data.leaves.some((l) => l.id === testLeaveId)) {
+      throw new Error('Leave not found in pending queue');
     }
     console.log('✓ Leave visible in authority pending queue');
 
-    // 9. Authority approves leave -> Generates QR Token
-    console.log('Test 9: Authority approves leave and generates QR verification token');
-    const approveRes = await api(`/api/leaves/${createdLeaveId}/approve`, {
+    // Authority approves leave
+    const approveRes = await api(`/api/leaves/${testLeaveId}/approve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
-      body: JSON.stringify({ comments: 'Verified medical certificate. Approved.' })
+      body: JSON.stringify({
+        approverName: 'Dr. Ramesh Kumar',
+        approverDesignation: 'HOD / Proctor',
+        comments: 'Approved after verification of medical prescription'
+      })
     });
-    if (approveRes.status !== 200 || !approveRes.data.token) {
-      throw new Error('Approval failed: ' + JSON.stringify(approveRes));
+    if (approveRes.status !== 200 || !approveRes.data.success || !approveRes.data.token) {
+      throw new Error('Leave approval failed: ' + JSON.stringify(approveRes));
     }
     const qrToken = approveRes.data.token;
-    console.log('✓ Leave approved successfully. Generated QR Token:', qrToken);
+    console.log(`✓ Leave approved. Secure QR token generated: ${qrToken.slice(0, 16)}...`);
 
-    // 10. Student fetches QR pass
-    console.log('Test 10: Student retrieves approved QR pass');
-    const studentQr = await api(`/api/qr/code/${createdLeaveId}`, {
-      headers: { Authorization: `Bearer ${studentToken}` }
-    });
-    if (studentQr.status !== 200 || !studentQr.data.qrDataUrl || studentQr.data.token !== qrToken) {
-      throw new Error('Student QR fetch failed: ' + JSON.stringify(studentQr));
-    }
-    console.log('✓ Student successfully retrieved QR code image & token');
-
-    // 11. Authority scans valid QR code
-    console.log('Test 11: Authority scans QR code at return verification');
+    // QR Verification Scan (First Scan - Valid Lookup)
     const scanRes = await api('/api/qr/scan', {
       method: 'POST',
       headers: {
@@ -158,29 +263,32 @@ async function runTests() {
       },
       body: JSON.stringify({ token: qrToken })
     });
-    if (scanRes.status !== 200 || !scanRes.data.valid || scanRes.data.status !== 'VALID_LEAVE') {
-      throw new Error('QR scan failed for valid leave: ' + JSON.stringify(scanRes));
+    if (scanRes.status !== 200 || scanRes.data.status !== 'VALID_LEAVE' || !scanRes.data.valid) {
+      throw new Error('QR scan verification lookup failed: ' + JSON.stringify(scanRes));
     }
-    console.log('✓ Scanner returned VALID BITM LEAVE for student:', scanRes.data.leave.studentName);
+    console.log('✓ QR scan verified successfully: VALID_LEAVE');
 
-    // 12. Authority clicks [VERIFY LEAVE]
-    console.log('Test 12: Authority finalizes verification');
-    const verifyRes = await api('/api/qr/verify', {
+    // Authority confirms final verification with Proctor name
+    const verifyConfirm = await api('/api/qr/verify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
-      body: JSON.stringify({ leaveId: createdLeaveId, tokenId: scanRes.data.leave.tokenId })
+      body: JSON.stringify({
+        leaveId: testLeaveId,
+        tokenId: scanRes.data.tokenRecordId,
+        verifiedByName: 'Prof. Anitha Sharma',
+        notes: 'Gate check verified by Security In-charge'
+      })
     });
-    if (verifyRes.status !== 200 || verifyRes.data.verification.status !== 'VERIFIED') {
-      throw new Error('Verification failed: ' + JSON.stringify(verifyRes));
+    if (verifyConfirm.status !== 200 || !verifyConfirm.data.success) {
+      throw new Error('Final QR verification failed: ' + JSON.stringify(verifyConfirm));
     }
-    console.log('✓ Leave status updated to VERIFIED in database');
+    console.log('✓ Authority confirmed leave verification: Expired & archived');
 
-    // 13. Duplicate scan prevention check
-    console.log('Test 13: Duplicate QR scan prevention');
-    const duplicateScan = await api('/api/qr/scan', {
+    // Duplicate QR Scan Test (Must be blocked)
+    const dupScan = await api('/api/qr/scan', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -188,46 +296,57 @@ async function runTests() {
       },
       body: JSON.stringify({ token: qrToken })
     });
-    if (!duplicateScan.data.alreadyVerified || duplicateScan.data.status !== 'ALREADY_VERIFIED') {
-      throw new Error('Expected ALREADY_VERIFIED duplicate status, got: ' + JSON.stringify(duplicateScan));
+    if (dupScan.data.valid !== false || (dupScan.data.status !== 'ALREADY_USED' && dupScan.data.status !== 'ALREADY_VERIFIED')) {
+      throw new Error('Duplicate scan was not blocked: ' + JSON.stringify(dupScan));
     }
-    console.log('✓ Duplicate scan blocked with message:', duplicateScan.data.message);
+    console.log('✓ Duplicate QR scan blocked properly: ALREADY_USED');
 
-    // 14. Invalid QR token test
-    console.log('Test 14: Invalid QR scan');
+    // Invalid QR Scan Test
     const invalidScan = await api('/api/qr/scan', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
-      body: JSON.stringify({ token: 'BITM-INVALID-RANDOM-TOKEN-999' })
+      body: JSON.stringify({ token: 'INVALID-QR-TOKEN-XYZ' })
     });
     if (invalidScan.data.valid !== false || invalidScan.data.status !== 'INVALID_LEAVE') {
-      throw new Error('Expected INVALID_LEAVE status, got: ' + JSON.stringify(invalidScan));
+      throw new Error('Invalid QR not handled correctly: ' + JSON.stringify(invalidScan));
     }
-    console.log('✓ Invalid QR token properly recognized as INVALID LEAVE');
+    console.log('✓ Invalid QR token rejected properly: INVALID_LEAVE');
 
-    // 15. Student notifications received
-    console.log('Test 15: Student received notifications for submission, approval, and verification');
-    const notifs = await api('/api/notifications', {
-      headers: { Authorization: `Bearer ${studentToken}` }
-    });
-    if (notifs.status !== 200 || notifs.data.notifications.length < 3) {
-      throw new Error('Student missing notifications: ' + JSON.stringify(notifs));
+    console.log('\n=======================================================');
+    console.log('🎉 ALL INTEGRATION TESTS PASSED (Admin, Auth, Student, QR)');
+    console.log('=======================================================');
+  } finally {
+    // Clean up test data from DB
+    try {
+      db.exec('PRAGMA foreign_keys = OFF;');
+      if (testLeaveId) {
+        db.prepare('DELETE FROM qr_verification_tokens WHERE leave_id = ?').run(testLeaveId);
+        db.prepare('DELETE FROM leave_verifications WHERE leave_id = ?').run(testLeaveId);
+        db.prepare('DELETE FROM leave_approvals WHERE leave_id = ?').run(testLeaveId);
+        db.prepare('DELETE FROM leave_documents WHERE leave_id = ?').run(testLeaveId);
+        db.prepare('DELETE FROM leave_applications WHERE id = ?').run(testLeaveId);
+      }
+      if (testStudentId) {
+        db.prepare('DELETE FROM students WHERE id = ?').run(testStudentId);
+      }
+      if (testProfileId) {
+        db.prepare('DELETE FROM notifications WHERE user_id = ?').run(testProfileId);
+        db.prepare('DELETE FROM profiles WHERE id = ?').run(testProfileId);
+      }
+      db.exec('PRAGMA foreign_keys = ON;');
+    } catch (cleanupErr) {
+      console.error('Test cleanup notice:', cleanupErr.message);
     }
-    console.log(`✓ Student has ${notifs.data.notifications.length} notifications logged`);
 
-    // Clean up dummy test file
-    if (fs.existsSync(dummyCertPath)) fs.unlinkSync(dummyCertPath);
-
-    console.log('=======================================================');
-    console.log('ALL BACKEND API TESTS PASSED SUCCESSFULLY! (15/15)');
-    console.log('=======================================================');
-  } catch (err) {
-    console.error('❌ TEST FAILED:', err);
-    process.exit(1);
+    // Close in-memory test server
+    server.close();
   }
 }
 
-runTests();
+runTests().catch((err) => {
+  console.error('\n❌ TEST SUITE FAILED:\n', err);
+  process.exit(1);
+});

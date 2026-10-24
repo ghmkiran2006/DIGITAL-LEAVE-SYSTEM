@@ -107,6 +107,8 @@ function initSchema() {
       grace_date TEXT,
       verification_deadline TEXT,
       student_hidden INTEGER DEFAULT 0,
+      verified_at TEXT,
+      verified_by_name TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
@@ -253,6 +255,8 @@ function initSchema() {
     `ALTER TABLE leave_applications ADD COLUMN grace_date TEXT`,
     `ALTER TABLE leave_applications ADD COLUMN verification_deadline TEXT`,
     `ALTER TABLE leave_applications ADD COLUMN student_hidden INTEGER DEFAULT 0`,
+    `ALTER TABLE leave_applications ADD COLUMN verified_at TEXT`,
+    `ALTER TABLE leave_applications ADD COLUMN verified_by_name TEXT`,
     `ALTER TABLE leave_approvals ADD COLUMN approver_name TEXT`,
     `ALTER TABLE leave_verifications ADD COLUMN verified_by_name TEXT`
   ];

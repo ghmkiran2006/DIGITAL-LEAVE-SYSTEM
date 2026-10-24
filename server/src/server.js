@@ -41,6 +41,15 @@ const qrRoutes = require('./routes/qr.routes');
 const studentMgmtRoutes = require('./routes/student-management.routes');
 const adminRoutes = require('./routes/admin.routes');
 
+// Health check endpoint for uptime monitors, Render health checks, and test suite
+app.get(['/', '/health', '/api/health'], (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'Digital Leave System Backend',
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/qr', qrRoutes);
@@ -165,6 +174,10 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Digital Leave System Backend running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Digital Leave System Backend running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
